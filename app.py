@@ -63,11 +63,8 @@ st.sidebar.markdown("Then upload your files on the main panel.")
 
 # ---------------------- HELPERS ---------------------- #
 
-def read_uploaded_file(uploaded_file: st.runtime.uploaded_file_manager.UploadedFile) -> pd.DataFrame:
-    """
-    Read an uploaded Excel/CSV/TXT file into a pandas DataFrame,
-    using the first row as header and dropping any 'Unnamed:*' index columns.
-    """
+def read_uploaded_file(uploaded_file):
+    """Read Excel/CSV/TXT into DataFrame, drop Unnamed index columns."""
     if uploaded_file is None:
         return None
 
@@ -76,10 +73,8 @@ def read_uploaded_file(uploaded_file: st.runtime.uploaded_file_manager.UploadedF
     if filename.endswith(".xls") or filename.endswith(".xlsx"):
         df = pd.read_excel(uploaded_file, header=0)
     else:
-        # autodetect separator for csv/tsv/txt
         df = pd.read_csv(uploaded_file, sep=None, engine="python", header=0)
 
-    # drop auto-generated index columns
     drop_cols = [c for c in df.columns if str(c).startswith("Unnamed")]
     if drop_cols:
         df = df.drop(columns=drop_cols)
@@ -130,7 +125,7 @@ st.dataframe(geo_df.head())
 st.write("### Preview: GPL table (first 5 rows)")
 st.dataframe(gpl_df.head())
 
-# Drop any pre-existing Locus_tag in GEO2R (so we don't clash with new one)
+# Remove any old Locus_tag column from GEO2R
 if "Locus_tag" in geo_df.columns:
     geo_df = geo_df.drop(columns=["Locus_tag"])
 
@@ -173,7 +168,7 @@ st.write(
     f"Remaining: {after_drop}"
 )
 
-# Fix SO IDs if requested
+# Optional: convert SOxxxx -> SO_xxxx
 if add_underscore:
     def fix_so(tag: str) -> str:
         tag = str(tag)
@@ -182,6 +177,13 @@ if add_underscore:
         return tag
 
     merged["Locus_tag"] = merged["Locus_tag"].apply(fix_so)
+
+# **New safety filter**: keep only Locus_tag values that look like SO IDs
+valid_mask = merged["Locus_tag"].astype(str).str.startswith("SO")
+invalid_count = (~valid_mask).sum()
+if invalid_count > 0:
+    st.write(f"Filtered out {invalid_count} rows with non-SO Locus_tag values.")
+merged = merged[valid_mask].copy()
 
 # ---------------------- DEG FILTERING ---------------------- #
 
@@ -251,4 +253,3 @@ Now you can:
 - Use the **DEG table** in your BTP report for tables and pathway interpretation
 """
 )
-
